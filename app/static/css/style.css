@@ -217,6 +217,13 @@ th {
     display: none;
 }
 
+.file-info {
+    display: block;
+    margin-top: 0.5rem;
+    font-size: 0.9rem;
+    color: #666;
+}
+
 @media (max-width: 768px) {
     .container {
         margin: 1rem;

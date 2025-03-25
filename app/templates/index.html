@@ -19,8 +19,9 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="curriculumFile">커리큘럼 파일</label>
-                    <input type="file" id="curriculumFile" name="curriculum_file" accept=".txt,.json" required>
+                    <label for="curriculum_file">커리큘럼 파일 선택 (JSON 또는 Excel)</label>
+                    <input type="file" id="curriculum_file" name="curriculum_file" accept=".json,.xlsx,.xls" required>
+                    <small class="file-info">* JSON 파일 또는 Excel 파일(.xlsx, .xls)을 업로드해주세요.</small>
                 </div>
 
                 <button type="submit" class="submit-btn">분석하기</button>
@@ -29,7 +30,7 @@
 
         <div id="loadingSpinner" class="loading-spinner hidden">
             <div class="spinner"></div>
-            <p>분석 중입니다...</p>
+            <p id="progressMessage">분석을 시작합니다...</p>
         </div>
 
         <div id="results" class="results hidden">
@@ -53,36 +54,18 @@
                 </div>
             </div>
 
-            <div class="result-section">
-                <h2>커리큘럼 매칭 분석</h2>
-                <div class="analysis-card">
-                    <h3>🎯 매칭된 단원: "게임 제작 심화 이론"</h3>
-                    <div class="matching-info">
-                        <div class="matching-score">
-                            <span class="score-label">부합도</span>
-                            <span id="matchingScore" class="score-value">약 80% 일치</span>
-                        </div>
-                    </div>
+            <div class="analysis-section">
+                <h3>📚 커리큘럼 매칭 분석</h3>
+                <div class="result-box">
+                    <h4>🎯 매칭된 교과목</h4>
+                    <div id="matchedSubjects" class="matched-subjects"></div>
                 </div>
-                
-                <div class="analysis-card">
-                    <h3>✅ 부합도 측정 기준</h3>
-                    <div class="criteria-table">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>기준 항목</th>
-                                    <th>포함 여부</th>
-                                </tr>
-                            </thead>
-                            <tbody id="criteriaTableBody">
-                            </tbody>
-                        </table>
-                    </div>
+                <div class="result-box">
+                    <h4>✅ 세부내용 달성도</h4>
+                    <div id="detailsMatches" class="details-matches"></div>
                 </div>
-                
-                <div class="chart-container">
-                    <h3>📊 교과목 매칭 분석</h3>
+                <div class="result-box">
+                    <h4>📊 교과목별 매칭 분석</h4>
                     <canvas id="subjectChart"></canvas>
                 </div>
             </div>
@@ -90,35 +73,28 @@
     </div>
 
     <script>
-        let chart = null;
+        let subjectChart = null;  // 전역 변수로 차트 객체 선언
 
-        function createChart(data) {
-            if (chart) {
-                chart.destroy();
-            }
-
+        function createChart(matchedSubjects) {
             const ctx = document.getElementById('subjectChart').getContext('2d');
-            chart = new Chart(ctx, {
+            
+            // 기존 차트 제거
+            if (subjectChart) {
+                subjectChart.destroy();
+            }
+            
+            const labels = matchedSubjects.map(subject => subject.name);
+            const data = matchedSubjects.map(subject => subject.achievement_rate);
+            
+            subjectChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: Object.keys(data),
+                    labels: labels,
                     datasets: [{
-                        label: '매칭률 (%)',
-                        data: Object.values(data),
-                        backgroundColor: [
-                            'rgba(255, 119, 16, 0.5)',
-                            'rgba(255, 149, 46, 0.5)',
-                            'rgba(255, 179, 76, 0.5)',
-                            'rgba(255, 209, 106, 0.5)',
-                            'rgba(255, 239, 136, 0.5)'
-                        ],
-                        borderColor: [
-                            'rgba(255, 119, 16, 1)',
-                            'rgba(255, 149, 46, 1)',
-                            'rgba(255, 179, 76, 1)',
-                            'rgba(255, 209, 106, 1)',
-                            'rgba(255, 239, 136, 1)'
-                        ],
+                        label: '달성도 (%)',
+                        data: data,
+                        backgroundColor: 'rgba(0, 128, 128, 0.6)',
+                        borderColor: 'rgba(0, 128, 128, 1)',
                         borderWidth: 1
                     }]
                 },
@@ -129,25 +105,35 @@
                             beginAtZero: true,
                             max: 100
                         }
-                    },
-                    plugins: {
-                        title: {
-                            display: true,
-                            text: '교과목별 매칭률'
-                        }
                     }
                 }
             });
+        }
+
+        function generateDetailsTableRows(detailsMatches) {
+            let rows = '';
+            for (const [subject, matchInfo] of Object.entries(detailsMatches)) {
+                const detailItems = matchInfo.matches.map((achieved, index) => `
+                    <tr>
+                        <td>${subject}</td>
+                        <td>세부내용 ${index + 1}</td>
+                        <td>${achieved ? '✓' : '✗'}</td>
+                    </tr>
+                `).join('');
+                rows += detailItems;
+            }
+            return rows;
         }
 
         document.addEventListener('DOMContentLoaded', function() {
             const form = document.getElementById('analysisForm');
             const loadingSpinner = document.getElementById('loadingSpinner');
             const results = document.getElementById('results');
+            const progressMessage = document.getElementById('progressMessage');
 
             form.addEventListener('submit', async function(e) {
                 e.preventDefault();
-
+                
                 const formData = new FormData(form);
                 
                 if (!formData.get('vtt_file') || !formData.get('curriculum_file')) {
@@ -157,6 +143,7 @@
 
                 loadingSpinner.classList.remove('hidden');
                 results.classList.add('hidden');
+                progressMessage.textContent = "분석을 시작합니다...";
                 
                 try {
                     const response = await fetch('/analyze', {
@@ -170,6 +157,11 @@
 
                     const data = await response.json();
                     
+                    // 진행 상황 메시지 업데이트
+                    if (data.progress) {
+                        progressMessage.textContent = data.progress;
+                    }
+                    
                     // VTT 분석 결과를 각 섹션에 표시
                     const vttData = data.vtt_analysis.split('\n\n');
                     document.getElementById('vttCommunication').innerHTML = formatContent(vttData[0] || '');
@@ -178,16 +170,7 @@
                     document.getElementById('vttQuestions').innerHTML = formatContent(vttData[3] || '');
                     
                     // 커리큘럼 분석 결과 표시
-                    const matchData = data.curriculum_analysis;
-                    document.getElementById('matchingScore').textContent = 
-                        `약 ${Math.round(matchData.overall_match_percentage)}% 일치`;
-                    
-                    // 기준 테이블 업데이트
-                    const criteriaTableBody = document.getElementById('criteriaTableBody');
-                    criteriaTableBody.innerHTML = generateCriteriaTableRows(matchData.criteria_matches);
-                    
-                    // 교과목 매칭 차트 생성
-                    createChart(data.curriculum_analysis.subject_matches);
+                    displayCurriculumAnalysis(data);
                     
                     results.classList.remove('hidden');
                 } catch (error) {
@@ -205,19 +188,103 @@
                 .trim();
         }
 
-        function generateCriteriaTableRows(criteria) {
-            return Object.entries(criteria)
-                .map(([criterion, included]) => `
-                    <tr>
-                        <td>${criterion}</td>
-                        <td class="criteria-status">
-                            ${included ? 
-                                '<span class="status-check">✓</span>' : 
-                                '<span class="status-x">✗</span>'}
-                        </td>
-                    </tr>
-                `).join('');
+        function displayCurriculumAnalysis(data) {
+            const curriculumSection = document.querySelector('.analysis-section');
+            curriculumSection.style.display = 'block';
+            
+            // 매칭된 교과목 표시
+            const matchedSubjectsDiv = document.getElementById('matchedSubjects');
+            matchedSubjectsDiv.innerHTML = '';
+            
+            if (data.curriculum_analysis.matched_subjects && data.curriculum_analysis.matched_subjects.length > 0) {
+                const subjectsList = document.createElement('ul');
+                subjectsList.className = 'matched-subjects-list';
+                
+                data.curriculum_analysis.matched_subjects.forEach(subject => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `
+                        <span class="subject-name">${subject.name}</span>
+                        <span class="achievement-rate">달성도: ${subject.achievement_rate}%</span>
+                    `;
+                    subjectsList.appendChild(li);
+                });
+                
+                matchedSubjectsDiv.appendChild(subjectsList);
+            } else {
+                matchedSubjectsDiv.innerHTML = '<p>매칭된 교과목이 없습니다.</p>';
+            }
+            
+            // 세부내용 달성도 표시
+            const detailsMatchesDiv = document.getElementById('detailsMatches');
+            detailsMatchesDiv.innerHTML = '';
+            
+            if (data.curriculum_analysis.details_matches) {
+                const detailsTable = document.createElement('table');
+                detailsTable.className = 'details-table';
+                detailsTable.innerHTML = `
+                    <thead>
+                        <tr>
+                            <th>교과목</th>
+                            <th>세부내용</th>
+                            <th>달성 여부</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${generateDetailsTableRows(data.curriculum_analysis.details_matches)}
+                    </tbody>
+                `;
+                detailsMatchesDiv.appendChild(detailsTable);
+            }
+            
+            // 차트 생성
+            createChart(data.curriculum_analysis.matched_subjects);
         }
     </script>
+
+    <style>
+        .matched-subjects-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .matched-subjects-list li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            margin-bottom: 5px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+
+        .subject-name {
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .achievement-rate {
+            color: #008080;
+            font-weight: bold;
+        }
+
+        .details-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        .details-table th,
+        .details-table td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .details-table th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+    </style>
 </body>
 </html> 
