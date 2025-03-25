@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>강의 분석기</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>강의 분석기</h1>
+        
+        <div class="upload-form">
+            <form id="analysisForm">
+                <div class="form-group">
+                    <label for="vttFile">VTT 파일</label>
+                    <input type="file" id="vttFile" name="vtt_file" accept=".vtt" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="curriculumFile">커리큘럼 파일</label>
+                    <input type="file" id="curriculumFile" name="curriculum_file" accept=".txt,.json" required>
+                </div>
+
+                <button type="submit" class="submit-btn">분석하기</button>
+            </form>
+        </div>
+
+        <div id="loadingSpinner" class="loading-spinner hidden">
+            <div class="spinner"></div>
+            <p>분석 중입니다...</p>
+        </div>
+
+        <div id="results" class="results hidden">
+            <div class="result-section">
+                <h2>강의 내용 요약 (VTT 기반)</h2>
+                <div class="analysis-card">
+                    <h3>🎯 주석 형식 및 수강생 소통</h3>
+                    <div id="vttCommunication" class="analysis-content"></div>
+                </div>
+                <div class="analysis-card">
+                    <h3>📝 오늘 수업 목표</h3>
+                    <div id="vttObjectives" class="analysis-content"></div>
+                </div>
+                <div class="analysis-card">
+                    <h3>💻 예제 코드 설명</h3>
+                    <div id="vttExamples" class="analysis-content"></div>
+                </div>
+                <div class="analysis-card">
+                    <h3>📌 학습자의 질문 응답</h3>
+                    <div id="vttQuestions" class="analysis-content"></div>
+                </div>
+            </div>
+
+            <div class="result-section">
+                <h2>커리큘럼 매칭 분석</h2>
+                <div class="analysis-card">
+                    <h3>🎯 매칭된 단원: "게임 제작 심화 이론"</h3>
+                    <div class="matching-info">
+                        <div class="matching-score">
+                            <span class="score-label">부합도</span>
+                            <span id="matchingScore" class="score-value">약 80% 일치</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="analysis-card">
+                    <h3>✅ 부합도 측정 기준</h3>
+                    <div class="criteria-table">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>기준 항목</th>
+                                    <th>포함 여부</th>
+                                </tr>
+                            </thead>
+                            <tbody id="criteriaTableBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="chart-container">
+                    <h3>📊 교과목 매칭 분석</h3>
+                    <canvas id="subjectChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let chart = null;
+
+        function createChart(data) {
+            if (chart) {
+                chart.destroy();
+            }
+
+            const ctx = document.getElementById('subjectChart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(data),
+                    datasets: [{
+                        label: '매칭률 (%)',
+                        data: Object.values(data),
+                        backgroundColor: [
+                            'rgba(255, 119, 16, 0.5)',
+                            'rgba(255, 149, 46, 0.5)',
+                            'rgba(255, 179, 76, 0.5)',
+                            'rgba(255, 209, 106, 0.5)',
+                            'rgba(255, 239, 136, 0.5)'
+                        ],
+                        borderColor: [
+                            'rgba(255, 119, 16, 1)',
+                            'rgba(255, 149, 46, 1)',
+                            'rgba(255, 179, 76, 1)',
+                            'rgba(255, 209, 106, 1)',
+                            'rgba(255, 239, 136, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: '교과목별 매칭률'
+                        }
+                    }
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('analysisForm');
+            const loadingSpinner = document.getElementById('loadingSpinner');
+            const results = document.getElementById('results');
+
+            form.addEventListener('submit', async function(e) {
+                e.preventDefault();
+
+                const formData = new FormData(form);
+                
+                if (!formData.get('vtt_file') || !formData.get('curriculum_file')) {
+                    alert('모든 파일을 선택해주세요.');
+                    return;
+                }
+
+                loadingSpinner.classList.remove('hidden');
+                results.classList.add('hidden');
+                
+                try {
+                    const response = await fetch('/analyze', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('서버 오류가 발생했습니다.');
+                    }
+
+                    const data = await response.json();
+                    
+                    // VTT 분석 결과를 각 섹션에 표시
+                    const vttData = data.vtt_analysis.split('\n\n');
+                    document.getElementById('vttCommunication').innerHTML = formatContent(vttData[0] || '');
+                    document.getElementById('vttObjectives').innerHTML = formatContent(vttData[1] || '');
+                    document.getElementById('vttExamples').innerHTML = formatContent(vttData[2] || '');
+                    document.getElementById('vttQuestions').innerHTML = formatContent(vttData[3] || '');
+                    
+                    // 커리큘럼 분석 결과 표시
+                    const matchData = data.curriculum_analysis;
+                    document.getElementById('matchingScore').textContent = 
+                        `약 ${Math.round(matchData.overall_match_percentage)}% 일치`;
+                    
+                    // 기준 테이블 업데이트
+                    const criteriaTableBody = document.getElementById('criteriaTableBody');
+                    criteriaTableBody.innerHTML = generateCriteriaTableRows(matchData.criteria_matches);
+                    
+                    // 교과목 매칭 차트 생성
+                    createChart(data.curriculum_analysis.subject_matches);
+                    
+                    results.classList.remove('hidden');
+                } catch (error) {
+                    alert('오류가 발생했습니다: ' + error.message);
+                } finally {
+                    loadingSpinner.classList.add('hidden');
+                }
+            });
+        });
+
+        function formatContent(content) {
+            return content
+                .replace(/^[-•]\s*/gm, '• ')  // 불릿 포인트 통일
+                .replace(/\n/g, '<br>')       // 줄바꿈 처리
+                .trim();
+        }
+
+        function generateCriteriaTableRows(criteria) {
+            return Object.entries(criteria)
+                .map(([criterion, included]) => `
+                    <tr>
+                        <td>${criterion}</td>
+                        <td class="criteria-status">
+                            ${included ? 
+                                '<span class="status-check">✓</span>' : 
+                                '<span class="status-x">✗</span>'}
+                        </td>
+                    </tr>
+                `).join('');
+        }
+    </script>
+</body>
+</html> 

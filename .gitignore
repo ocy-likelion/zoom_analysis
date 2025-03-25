@@ -1,0 +1,75 @@
+# 환경 설정 파일
+.env
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# 가상환경
+venv/
+env/
+ENV/
+.venv/
+.env/
+.ENV/
+
+# IDE 설정
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# 로그 파일
+*.log
+logs/
+log/
+
+# 테스트 파일
+test_*.vtt
+test_*.txt
+test_*.json
+
+# 임시 파일
+*.tmp
+*.temp
+.coverage
+htmlcov/
+
+# 데이터베이스
+*.db
+*.sqlite3
+
+# 기타
+.pytest_cache/
+.coverage
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# 프로젝트 특정 파일
+uploaded_files/
+analysis_results/ 

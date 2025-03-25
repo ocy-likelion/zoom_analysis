@@ -1,0 +1,4 @@
+flask==2.3.3
+openai==0.28.1
+python-dotenv==1.0.0
+webvtt-py==0.4.6 
